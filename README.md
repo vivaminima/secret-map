@@ -2,6 +2,8 @@
 
 *Part of the [Vivaminima tools](https://github.com/vivaminima) for Claude Code users.*
 
+<img src="https://raw.githubusercontent.com/vivaminima/vivaminima/main/img/run/secret-map.png" width="760" alt="secret-map: real output of the free version on a made-up sample">
+
 See where API keys and passwords are sitting in a folder. The report shows locations, not values.
 
 ## New to this? Start here
