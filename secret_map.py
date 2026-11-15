@@ -19,7 +19,7 @@ import sys
 import unicodedata
 from pathlib import Path
 
-VERSION = "1.0.3"
+VERSION = "1.0.4"
 MAX_FILE_BYTES = 2 * 1024 * 1024
 SKIP_DIRS = {".git", ".hg", ".svn", "node_modules", "__pycache__", ".venv", "venv", "env", "dist", "build",
              ".mypy_cache", ".pytest_cache", ".tox", ".idea", ".next", "target", "vendor"}
@@ -304,7 +304,17 @@ def sensitive_filename(name):
     return None
 
 
-def scan(root, max_bytes=MAX_FILE_BYTES, show_fingerprints=False):
+def finding_id(item):
+    """An opaque id for one finding: where it is and what kind, plus - for long random values only -
+    the first 6 characters of a hash of the value. Never the value, and nothing a value can be read from."""
+    mark = (item.get("fingerprint") or "")[:6]
+    text = "%s|%s|%s|%s" % (item["file"], item["rule"], item.get("name") or "", mark)
+    return hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()[:16]
+
+
+def scan(root, max_bytes=MAX_FILE_BYTES, show_fingerprints=False, ids=None):
+    """Scan a folder. `ids`, when a list is given, is filled with one opaque id per finding (see
+    finding_id) - used to tell what is new since the last run without keeping any value."""
     root = Path(root).resolve()
     if not root.is_dir():
         raise ValueError("Path is not an existing directory: %s" % root)
@@ -329,6 +339,8 @@ def scan(root, max_bytes=MAX_FILE_BYTES, show_fingerprints=False):
                 findings.append({"file": rel, "line": 0, "rule": "sensitive-file", "severity": "low",
                                  "description": note, "name": None, "fingerprint": None, "length": None,
                                  "example_like": False})
+                if ids is not None:
+                    ids.append(finding_id(findings[-1]))
             if path.suffix.lower() in SKIP_SUFFIXES:
                 stats["skipped_binary"] += 1
                 continue
@@ -349,9 +361,11 @@ def scan(root, max_bytes=MAX_FILE_BYTES, show_fingerprints=False):
             for item in scan_text(text, config_like):
                 if item["fingerprint"] and item["fingerprint"] in prints:
                     continue
+                item["file"] = rel
+                if ids is not None:
+                    ids.append(finding_id(item))
                 if not show_fingerprints:      # ids are opt-in; ignore-file matching above still works
                     item["fingerprint"], item["length"] = None, None
-                item["file"] = rel
                 findings.append(item)
     findings.sort(key=lambda f: (f["file"], f["line"], f["rule"]))
     counts = {level: sum(1 for f in findings if f["severity"] == level) for level in LEVELS}
@@ -388,6 +402,70 @@ def render_text(report, fail_on):
     return "\n".join(lines)
 
 
+# --------------------------------------------------------------------------- what is new since the last run
+
+def state_dir():
+    """Where the last run of each folder is remembered: SECRET_MAP_HOME, else ~/.secret-map."""
+    return Path(os.environ.get("SECRET_MAP_HOME") or (Path.home() / ".secret-map"))
+
+
+def state_path(root):
+    name = hashlib.sha256(os.path.normcase(str(Path(root).resolve())).encode("utf-8", "replace")).hexdigest()[:16]
+    return state_dir() / "last-runs" / (name + ".json")
+
+
+def load_last(root):
+    """The ids of the previous run of this folder as {id: count}, or None when there was none."""
+    try:
+        data = json.loads(state_path(root).read_text(encoding="utf-8"))
+        ids = data.get("ids")
+        return ids if isinstance(ids, dict) else None
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def save_last(root, ids):
+    """Remember this run: ids and counts only - no value, no file name, no path. Best effort."""
+    counts = {}
+    for one in ids:
+        counts[one] = counts.get(one, 0) + 1
+    try:
+        path = state_path(root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp = path.with_name(path.name + ".tmp")
+        temp.write_text(json.dumps({"tool": "Secret Map", "version": VERSION, "ids": counts}, sort_keys=True),
+                        encoding="utf-8")
+        os.replace(str(temp), str(path))
+        return True
+    except OSError:
+        return False
+
+
+def count_new(ids, previous):
+    """How many findings of this run were not there in the previous run."""
+    left = dict(previous)
+    new = 0
+    for one in ids:
+        if left.get(one, 0) > 0:
+            left[one] -= 1
+        else:
+            new += 1
+    return new
+
+
+def closing_line(findings, new=None):
+    """One closing line with the real numbers, or None when there is no finding at all.
+
+    `new` is the number of findings that were not there on the last run - known only when the
+    user asked for --remember and there was a last run."""
+    if new:
+        return "%d new since last run. Baseline diff and the HTML report are in Pro." % new
+    if not findings:
+        return None
+    return "%d finding%s. Pro can save a baseline and show only the new ones next run." % (
+        findings, "" if findings == 1 else "s")
+
+
 def safe_stdio():
     """Never crash on a console that cannot show a character (cp949, ascii): replace it instead."""
     for stream in (sys.stdout, sys.stderr):
@@ -408,10 +486,13 @@ def main(argv=None):
     parser.add_argument("--max-size", type=int, default=MAX_FILE_BYTES, help="skip files larger than this many bytes")
     parser.add_argument("--fingerprints", action="store_true",
                         help="show a short one-way id for long random values (off by default; see README)")
+    parser.add_argument("--remember", action="store_true",
+                        help="remember this run under ~/.secret-map so the next run can say what is new (see README)")
     parser.add_argument("--version", action="version", version="Secret Map " + VERSION)
     args = parser.parse_args(argv)
+    ids = []
     try:
-        report = scan(args.folder, args.max_size, args.fingerprints)
+        report = scan(args.folder, args.max_size, args.fingerprints, ids=ids)
     except (OSError, ValueError) as exc:
         print("ERROR: %s" % exc, file=sys.stderr)
         return 2
@@ -420,6 +501,15 @@ def main(argv=None):
         print(rendered)
     except UnicodeEncodeError:
         sys.stdout.buffer.write((rendered + "\n").encode("utf-8", "replace"))
+    new = None
+    if args.remember and report["stats"]["files_scanned"]:   # off unless asked: by default nothing is ever written
+        previous = load_last(report["root"])
+        new = count_new(ids, previous) if previous is not None else None
+        save_last(report["root"], ids)
+    line = closing_line(len(report["findings"]), new)
+    if line:                                       # after the report; on stderr with --json so the JSON stays clean
+        sys.stdout.flush()
+        print(("\n" if not args.json else "") + line, file=sys.stderr if args.json else sys.stdout)
     threshold = LEVELS.index(args.fail_on)
     if report["stats"]["files_scanned"] == 0:
         return 2

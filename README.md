@@ -87,10 +87,23 @@ fingerprint:50d783eecb15
 --fail-on LEVEL      low | medium | high   (default: medium)
 --max-size BYTES     skip larger files (default 2 MiB)
 --fingerprints       show one-way ids for long random values (off by default)
+--remember           save this run's finding ids under ~/.secret-map, to say what is new next time
 ```
 
 `0` nothing at or above the level, `1` findings, `2` bad path **or nothing was scanned**.
 An empty or unreadable folder is never reported as clean.
+
+## The closing line, and `--remember`
+
+When a scan has findings, the report ends with one line that says how many, for example
+`3 findings. Pro can save a baseline and show only the new ones next run.` With no finding, nothing is added.
+With `--json` the line goes to stderr, so the JSON stays clean.
+
+By default this tool writes nothing, anywhere. `--remember` is the one exception, and only when you ask for it:
+it saves one opaque id per finding and a count - **no value, no file name, no path** - in
+`~/.secret-map/last-runs/` (or under the folder named by the `SECRET_MAP_HOME` environment variable), so that
+the next `--remember` run of the same folder can end with `N new since last run.` The folder you scan is only
+read either way. Deleting `~/.secret-map` forgets everything.
 
 ## Limits — read this
 
@@ -111,7 +124,7 @@ python -X utf8 secret_map.py path/to/project
 
 Python 3 standard library only - nothing to install.
 
-- Tested: Windows 11, Python 3.10.11 (this release, 29 tests, including a cp949 console run).
+- Tested: Windows 11, Python 3.10.11 (this release, 46 tests, including a cp949 console run).
 - Version 1.0.2 was tested on Linux, Python 3.13; 1.0.0 was also run on Windows with Python 3.10 by an independent reviewer.
 - Other versions and platforms have not been tested.
 
@@ -121,5 +134,7 @@ MIT licence. See CHANGELOG.md for what changed.
 
 ## More from Vivaminima
 
-- **Token Audit Kit ($19)** — see how many tokens your CLAUDE.md and its @imports cost before your first prompt, and a step-by-step guide to split it. Free script: https://github.com/vivaminima/claude-md-audit · Paid kit: https://vivaminima.lemonsqueezy.com/checkout/buy/57973270-94ea-4cc7-bcb4-294693714087
-- Free tools: [skill-audit-kit](https://github.com/vivaminima/skill-audit-kit) · [secret-map](https://github.com/vivaminima/secret-map) · [inbox-ledger](https://github.com/vivaminima/inbox-ledger)
+- **Token Audit Kit ($19)** — see how many tokens your CLAUDE.md and its @imports cost before your first prompt, and a step-by-step guide to split it. Free script: https://github.com/vivaminima/context-file-audit · Paid kit: https://vivaminima.lemonsqueezy.com/checkout/buy/57973270-94ea-4cc7-bcb4-294693714087
+- Free tools: [skill-audit-kit](https://github.com/vivaminima/skill-audit-kit) · [secret-map](https://github.com/vivaminima/secret-map) · [inbox-ledger](https://github.com/vivaminima/inbox-ledger) · [release-gate](https://github.com/vivaminima/release-gate) · [skill-install-gate](https://github.com/vivaminima/skill-install-gate) · [console-safe](https://github.com/vivaminima/console-safe) · [checklist-stop](https://github.com/vivaminima/checklist-stop) · [handoff-check](https://github.com/vivaminima/handoff-check) · [llm-budget-router-lite](https://github.com/vivaminima/llm-budget-router-lite) · [go-no-go-verdict-skill](https://github.com/vivaminima/go-no-go-verdict-skill) · [ai-company-starter-kit](https://github.com/vivaminima/ai-company-starter-kit) · [beginner-readme-section](https://github.com/vivaminima/beginner-readme-section)
+
+Vivaminima is not affiliated with, endorsed by or sponsored by Anthropic.
