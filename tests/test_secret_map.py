@@ -8,6 +8,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import secret_map as sm
+import atexit, os as _os, shutil as _shutil, tempfile as _tempfile
+_HOME = _tempfile.mkdtemp()                      # the last-run memory must never touch the real home folder
+_os.environ["SECRET_MAP_HOME"] = _HOME
+atexit.register(_shutil.rmtree, _HOME, True)
 
 A = "A1b2C3d4E5f6G7h8J9k0L1m2N3p4Q5r6S7t8U9v0W1x2Y3z4"   # synthetic filler, not a real key
 # Every key-shaped test value is assembled at run time from fragments, so no complete

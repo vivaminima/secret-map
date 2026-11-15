@@ -9,6 +9,10 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 import secret_map as sm
+import atexit, os as _os, shutil as _shutil, tempfile as _tempfile
+_HOME = _tempfile.mkdtemp()                      # the last-run memory must never touch the real home folder
+_os.environ["SECRET_MAP_HOME"] = _HOME
+atexit.register(_shutil.rmtree, _HOME, True)
 
 # assembled at run time; no complete key-shaped string is stored in this file
 FAKE_GITHUB = "gh" + "p_" + "Q" * 36
