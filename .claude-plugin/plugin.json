@@ -1,0 +1,18 @@
+{
+  "name": "secret-map",
+  "description": "See where API keys and passwords sit in a folder before you share it. Shows locations, never values. One Python file, offline.",
+  "author": {
+    "name": "Vivaminima",
+    "url": "https://github.com/vivaminima"
+  },
+  "homepage": "https://vivastory4.gumroad.com/l/secret-map-pro",
+  "repository": "https://github.com/vivaminima/secret-map",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "cli",
+    "developer-tools",
+    "secret-scanning",
+    "security"
+  ]
+}
